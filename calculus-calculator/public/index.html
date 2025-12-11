@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculus Calculator</title>
+    <!-- Load Math.js and Plotly from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Allow vertical scrolling */
+            background: #000;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        #root {
+            position: relative;
+            z-index: 1;
+            color: #0f0; /* Matrix green text */
+            background: rgba(0, 0, 0, 0.85);
+            min-height: 100vh;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            border-left: 1px solid #0f0;
+            border-right: 1px solid #0f0;
+            box-sizing: border-box;
+        }
+        
+        /* Calculator UI Styles */
+        h1 {
+            text-align: center;
+            text-shadow: 0 0 10px #0f0;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 12px;
+            background: #050505;
+            border: 1px solid #0f0;
+            color: #0f0;
+            font-family: inherit;
+            font-size: 1em;
+            box-sizing: border-box;
+            outline: none;
+        }
+        input:focus, select:focus {
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: inherit;
+            width: 100%;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+        }
+        #result-area {
+            margin-top: 30px;
+            border: 1px solid #0f0;
+            padding: 20px;
+            min-height: 60px;
+            background: rgba(0, 20, 0, 0.5);
+            font-size: 1.2em;
+            word-wrap: break-word;
+        }
+        #graph-area {
+            margin-top: 30px;
+            width: 100%;
+            height: 500px;
+            border: 1px solid #0f0;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-bg"></canvas>
+    <div id="root">
+        <h1>Calculus Calculator</h1>
+        
+        <div class="input-group">
+            <label>Function f(x):</label>
+            <input type="text" id="function-input" placeholder="e.g., x^2, sin(x), 2*x + 5" value="x^2">
+        </div>
+
+        <div class="input-group">
+            <label>Operation:</label>
+            <select id="operation-select" onchange="toggleInputs()">
+                <option value="derivative">Derivative (d/dx)</option>
+                <option value="integral">Definite Integral (Area)</option>
+                <option value="limit">Limit (x -> a)</option>
+            </select>
+        </div>
+
+        <!-- Extra inputs for Integral/Limit -->
+        <div id="limit-input" class="input-group hidden">
+            <label>Approaching x = </label>
+            <input type="number" id="limit-val" value="0">
+        </div>
+        <div id="integral-input" class="input-group hidden">
+            <label>From x = </label>
+            <input type="number" id="int-from" value="0">
+            <label style="margin-top:10px">To x = </label>
+            <input type="number" id="int-to" value="5">
+        </div>
+
+        <button onclick="calculate()">CALCULATE</button>
+
+        <div id="result-area">
+            <strong>Result:</strong> <br>
+            <div id="steps-area" style="margin-bottom: 10px; color: #aaa; font-size: 0.9em;"></div>
+            <span id="result-text">Enter a function to begin...</span>
+        </div>
+
+        <div id="graph-area"></div>
+    </div>
+
+    <script>
+        // --- Matrix Background Logic ---
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        const chars = '∫∑∂∇∆π∞θλμεσφω√∛∜±÷×≠≈≡≤≥⊂⊃⊆⊇∪∩∈∉∅∀∃∄∴∵'.split('');
+        const fontSize = 16;
+        const columns = width / fontSize;
+        const drops = [];
+
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars[Math.floor(Math.random() * chars.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 33);
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        // --- Calculator Logic ---
+        
+        function toggleInputs() {
+            const op = document.getElementById('operation-select').value;
+            document.getElementById('limit-input').classList.add('hidden');
+            document.getElementById('integral-input').classList.add('hidden');
+            
+            if (op === 'limit') document.getElementById('limit-input').classList.remove('hidden');
+            if (op === 'integral') document.getElementById('integral-input').classList.remove('hidden');
+        }
+
+        function calculate() {
+            const expression = document.getElementById('function-input').value;
+            const operation = document.getElementById('operation-select').value;
+            const resultText = document.getElementById('result-text');
+            const stepsArea = document.getElementById('steps-area');
+            
+            // Clear previous steps
+            stepsArea.innerHTML = '';
+
+            try {
+                let resultStr = "";
+                let graphData = {};
+
+                if (operation === 'derivative') {
+                    const d = math.derivative(expression, 'x');
+                    resultStr = d.toString();
+                    
+                    // Generate pseudo-steps based on expression analysis
+                    let stepsHtml = "<strong>Steps:</strong><br>";
+                    stepsHtml += `1. Identify the function: f(x) = ${expression}<br>`;
+                    stepsHtml += `2. Apply differentiation rules (d/dx):<br>`;
+                    
+                    // Basic heuristic for steps display
+                    if (expression.includes('^')) {
+                        stepsHtml += `&nbsp;&nbsp;- Power Rule: d/dx(x^n) = n*x^(n-1)<br>`;
+                    }
+                    if (expression.includes('sin') || expression.includes('cos') || expression.includes('tan')) {
+                        stepsHtml += `&nbsp;&nbsp;- Trigonometric Rules applied (e.g., d/dx(sin x) = cos x)<br>`;
+                    }
+                    if (expression.includes('e^')) {
+                        stepsHtml += `&nbsp;&nbsp;- Exponential Rule: d/dx(e^x) = e^x<br>`;
+                    }
+                    if (expression.includes('+') || expression.includes('-')) {
+                        stepsHtml += `&nbsp;&nbsp;- Sum/Difference Rule: d/dx(u ± v) = u' ± v'<br>`;
+                    }
+                    
+                    stepsHtml += `3. Calculate result:<br>`;
+                    stepsArea.innerHTML = stepsHtml;
+
+                    resultText.innerText = `d/dx (${expression}) = ${resultStr}`;
+                    graphData = { type: 'derivative', expr: expression, res: resultStr };
+                } 
+                else if (operation === 'limit') {
+                    const val = parseFloat(document.getElementById('limit-val').value);
+                    // Numerical approximation for limit
+                    const f = math.compile(expression);
+                    const left = f.evaluate({x: val - 0.00001});
+                    const right = f.evaluate({x: val + 0.00001});
+                    const avg = (left + right) / 2;
+                    
+                    resultStr = avg.toFixed(4);
+                    resultText.innerText = `Limit x->${val} of (${expression}) ≈ ${resultStr}`;
+                    graphData = { type: 'limit', expr: expression, point: val, res: avg };
+                }
+                else if (operation === 'integral') {
+                    const from = parseFloat(document.getElementById('int-from').value);
+                    const to = parseFloat(document.getElementById('int-to').value);
+                    
+                    // Numerical integration (Riemann sum approximation)
+                    const f = math.compile(expression);
+                    let area = 0;
+                    const step = 0.01;
+                    for(let x = from; x < to; x += step) {
+                        area += f.evaluate({x: x}) * step;
+                    }
+                    
+                    resultStr = area.toFixed(4);
+                    resultText.innerText = `∫ from ${from} to ${to} of (${expression}) dx ≈ ${resultStr}`;
+                    graphData = { type: 'integral', expr: expression, from: from, to: to };
+                }
+
+                drawGraph(graphData);
+
+            } catch (error) {
+                resultText.innerText = "Error: " + error.message;
+                console.error(error);
+            }
+        }
+
+        function drawGraph(data) {
+            const xValues = [];
+            const yValues = [];
+            const yValues2 = []; // For derivative or fill
+            
+            const exprCompiled = math.compile(data.expr);
+            let derivCompiled = null;
+            if (data.type === 'derivative') {
+                derivCompiled = math.compile(data.res);
+            }
+
+            // Determine range
+            let start = -10, end = 10;
+            if (data.type === 'integral') {
+                start = Math.min(-10, data.from - 2);
+                end = Math.max(10, data.to + 2);
+            }
+
+            for (let x = start; x <= end; x += 0.1) {
+                xValues.push(x);
+                try {
+                    yValues.push(exprCompiled.evaluate({x: x}));
+                } catch(e) { yValues.push(null); }
+
+                if (derivCompiled) {
+                    try {
+                        yValues2.push(derivCompiled.evaluate({x: x}));
+                    } catch(e) { yValues2.push(null); }
+                }
+            }
+
+            const traces = [];
+
+            // Main function trace
+            traces.push({
+                x: xValues,
+                y: yValues,
+                type: 'scatter',
+                name: 'f(x)',
+                line: {color: '#00ffff', width: 3}
+            });
+
+            // Derivative trace
+            if (data.type === 'derivative') {
+                traces.push({
+                    x: xValues,
+                    y: yValues2,
+                    type: 'scatter',
+                    name: "f'(x)",
+                    line: {color: '#ff00ff', dash: 'dot', width: 3}
+                });
+            }
+
+            // Integral Area
+            if (data.type === 'integral') {
+                const xFill = [];
+                const yFill = [];
+                for(let x = data.from; x <= data.to; x += 0.1) {
+                    xFill.push(x);
+                    yFill.push(exprCompiled.evaluate({x: x}));
+                }
+                // Close the loop for fill
+                xFill.unshift(data.from); yFill.unshift(0);
+                xFill.push(data.to); yFill.push(0);
+
+                traces.push({
+                    x: xFill,
+                    y: yFill,
+                    fill: 'tozeroy',
+                    type: 'scatter',
+                    mode: 'none',
+                    name: 'Area',
+                    fillcolor: 'rgba(0, 255, 0, 0.3)'
+                });
+            }
+
+            // Limit Point
+            if (data.type === 'limit') {
+                traces.push({
+                    x: [data.point],
+                    y: [data.res],
+                    mode: 'markers',
+                    marker: { color: 'red', size: 12 },
+                    name: 'Limit Point'
+                });
+            }
+
+            const layout = {
+                title: 'Visualization',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#0f0' },
+                xaxis: { gridcolor: '#333', zerolinecolor: '#fff' },
+                yaxis: { gridcolor: '#333', zerolinecolor: '#fff' },
+                showlegend: true,
+                legend: { x: 0, y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+            };
+
+            Plotly.newPlot('graph-area', traces, layout);
+        }
+    </script>
+    
+    <!-- Ensure your main script is loaded correctly -->
+    <!-- If using React/Bundler, this usually points to the built bundle -->
+    <!--
+    <script src="path/to/your/bundle.js"></script>
+    -->
+</body>
+</html>
